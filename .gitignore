@@ -1,3 +1,5 @@
 .env
+unbound/etc-unbound/*
 pihole/etc-dnsmasq.d/*
 pihole/etc-pihole/*
+wireguard/etc-wireguard/*

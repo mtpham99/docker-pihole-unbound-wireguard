@@ -1,0 +1,22 @@
+# EXAMPLE FILE
+# /etc/network/interfaces.d/enp3s0
+# Create enp3s0 bridge to docker macvlan network via enp3s0
+# Different steps must be taken to do this using Networkmanager.
+# See https://kcore.org/2020/08/18/macvlan-host-access/
+
+# Static address for enp3s0
+allow-hotplug enp3s0
+iface enp3s0 inet static
+  address 192.168.0.2
+  netmask 255.255.255.0
+  gateway 192.168.0.1 
+# Docker macvlan bridge to enp3s0
+# "post-up" commands may also be manually run to setup bridge, but will not auto run at boot
+# placing "post-up" commands here ensure they are started at boot
+  post-up ip link add docker-mvlanbr link enp3s0 type macvlan mode bridge
+  post-up ip addr add 192.168.0.64/32 dev docker-mvlanbr
+  post-up ip link set docker-mvlanbr up
+  post-up ip route add 192.168.0.64/26 dev docker-mvlanbr # 192.168.0.65 - 192.168.0.126
+# Use pihole as host's dns
+# pihole has some local dns records but will ultimately use Unbound as forward dns
+  dns-nameserver 192.168.0.66

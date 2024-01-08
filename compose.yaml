@@ -1,0 +1,93 @@
+version: "3.5"
+
+# Network interfaces docker-mvlanbr and enp3s0 defined in /etc/network/interfaces.d/enp3s0
+# See example file "example-interface-setup"
+networks:
+  macvlan0:
+    name: macvlan0
+    driver: macvlan
+    driver_opts:
+      parent: enp3s0
+    ipam:
+      config:
+        - subnet: 192.168.0.0/24
+          gateway: 192.168.0.1
+          ip_range: 192.168.0.64/26 # 192.168.0.65 - 192.168.0.126
+          aux_addresses:
+            host: 192.168.0.64 # host's docker-mvlanbr interface address
+
+services: 
+  unbound:
+    image: mvance/unbound:latest
+    container_name: unbound
+    hostname: unbound
+    mac_address: de:ad:be:ef:ff:01
+    expose:
+      - "53/tcp"
+      - "53/udp"
+    networks:
+      macvlan0:
+        ipv4_address: 192.168.0.65
+    restart: unless-stopped
+# Uncomment if using custom unbound config
+    # volumes:
+      # - "./unbound/etc-unbound:/opt/unbound/etc/unbound"
+
+  pihole:
+    depends_on:
+      - unbound
+    image: pihole/pihole:latest
+    container_name: pihole
+    hostname: pihole
+    mac_address: de:ad:be:ef:ff:02
+    networks:
+      macvlan0:
+        ipv4_address: 192.168.0.66
+    volumes:
+      - "./pihole/etc-pihole:/etc/pihole"
+      - "./pihole/etc-dnsmasq.d:/etc/dnsmasq.d"
+    expose:
+      - "80/tcp"  # http
+      - "53/tcp"  # dns
+      - "53/udp"  # dns
+      - "67/udp"  # dhcp
+    environment:
+      FTLCONF_LOCAL_IPV4: 192.168.0.66
+      VIRTUAL_HOST: "pihole"
+      PIHOLE_DNS_: 192.168.0.65   # Unbound dns server ip
+      TZ: ${TIMEZONE}             # TIMEZONE env variable set in .env
+      WEBPASSWORD: ${WEBPASSWORD} # WEBPASSWORD env variable set in .env
+    cap_add:
+      - NET_ADMIN # Required for dhcp server
+    restart: unless-stopped
+
+  wireguard:
+    depends_on:
+      - unbound
+      - pihole
+    image: linuxserver/wireguard:latest
+    container_name: wireguard
+    hostname: wireguard
+    mac_address: de:ad:be:ef:ff:03
+    networks:
+      macvlan0:
+        ipv4_address: 192.168.0.67
+    volumes:
+      - "./wireguard/etc-wireguard:/config"
+    expose:
+      - 51820/udp # wireguard network interface port
+    environment:
+      - TZ=${TIMEZONE}
+      - SERVERURL=${WIREGUARD_URL}
+      - SERVERPORT=${WIREGUARD_PORT} # Need to port forward this to 51820 on server (or router if behind NAT)
+      - PEERS=${WIREGUARD_PEERS}
+      - PEERDNS=192.168.0.66 # pihole address
+      - INTERNAL_SUBNET=10.13.13.0
+      - ALLOWEDIPS=0.0.0.0/0
+      - PERSISTENTKEEPALIVE_PEERS=
+      - LOG_CONFS=true
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    restart: unless-stopped
