@@ -6,6 +6,14 @@ All docker services are run using a "macvlan" network providing each service wit
 
 A macvlan bridge to the host's primary network interface is used to allow host-container (and vice-versa) communication. See "Macvlan Networking" below for more info.
 
+## Scheduled Updates
+
+Scheduled updates can be made by adding the line below to one's crontab:
+
+```
+# Weekly updates at 5am on Sunday
+0 5 * * 1 cd pihole-unbound-wireguard && docker compose pull && docker compose down && docker compose up -d
+```
 
 ## Resources
 
